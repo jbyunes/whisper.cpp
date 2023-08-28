@@ -4879,6 +4879,10 @@ int whisper_full_parallel(
     return ret;
 }
 
+const char * whisper_token_from_id(struct whisper_context * ctx, int token_id) {
+    return ctx->vocab.id_to_token[token_id].c_str();
+}
+
 int whisper_full_n_segments_from_state(struct whisper_state * state) {
     return state->result_all.size();
 }

@@ -88,6 +88,7 @@ struct whisper_params {
     bool print_progress  = false;
     bool no_timestamps   = false;
     bool log_score       = false;
+    bool log_tokens      = false;
 
     std::string language  = "en";
     std::string prompt;
@@ -160,7 +161,8 @@ bool whisper_params_parse(int argc, char ** argv, whisper_params & params) {
         else if (arg == "-m"    || arg == "--model")           { params.model           = argv[++i]; }
         else if (arg == "-f"    || arg == "--file")            { params.fname_inp.emplace_back(argv[++i]); }
         else if (arg == "-oved" || arg == "--ov-e-device")     { params.openvino_encode_device = argv[++i]; }
-        else if (arg == "-ls"   || arg == "--log-score")       { params.log_score = true; }
+        else if (arg == "-ls"   || arg == "--log-score")       { params.log_score       = true; }
+        else if (arg == "-lt"   || arg == "--log-tokens")      { params.log_tokens      = true; }
         else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
             whisper_print_usage(argc, argv, params);
@@ -215,6 +217,7 @@ void whisper_print_usage(int /*argc*/, char ** argv, const whisper_params & para
     fprintf(stderr, "  -f FNAME,  --file FNAME        [%-7s] input WAV file path\n",                            "");
     fprintf(stderr, "  -oved D,   --ov-e-device DNAME [%-7s] the OpenVINO device used for encode inference\n",  params.openvino_encode_device.c_str());
     fprintf(stderr, "  -ls,       --log-score         [%-7s] log best decoder scores of tokens\n",              params.log_score?"true":"false");
+    fprintf(stderr, "  -lt,       --log-tokens        [%-7s] log token dictionnary\n",                          params.log_tokens?"true":"false");
     fprintf(stderr, "\n");
 }
 
@@ -489,21 +492,39 @@ bool output_csv(struct whisper_context * ctx, const char * fname, const whisper_
     return true;
 }
 
+bool output_tokens(struct whisper_context * ctx, const char * fname, const whisper_params & params, std::vector<std::vector<float>> pcmf32s) {
+    std::ofstream fout(fname);
+    if (!fout.is_open()) {
+        fprintf(stderr, "%s: failed to open '%s' for writing\n", __func__, fname);
+        return false;
+    }
+    fprintf(stderr, "%s: saving output to '%s'\n", __func__, fname);
+    for (int id=0; id<whisper_model_n_vocab(ctx); id++) {
+        const char *token = whisper_token_from_id(ctx,id);
+        fout << id << '\t' << token << std::endl;
+    }
+    return true;
+}
+
 bool output_score(struct whisper_context * ctx, const char * fname, const whisper_params & params, std::vector<std::vector<float>> pcmf32s) {
     std::ofstream fout(fname);
+    if (!fout.is_open()) {
+        fprintf(stderr, "%s: failed to open '%s' for writing\n", __func__, fname);
+        return false;
+    }
     fprintf(stderr, "%s: saving output to '%s'\n", __func__, fname);
 
     const int n_segments = whisper_full_n_segments(ctx);
     // fprintf(stderr,"segments: %d\n",n_segments);
     for (int i = 0; i < n_segments; ++i) {
-        const int n_tokens = whisper_full_n_tokens(ctx, i);
+        const int n_tokens = whisper_full_n_tokens(ctx,i);
         // fprintf(stderr,"tokens: %d\n",n_tokens);
         for (int j = 0; j < n_tokens; j++) {
-            auto token = whisper_full_get_token_text(ctx, i, j);
-            auto probability = whisper_full_get_token_p(ctx, i, j);
+            auto token = whisper_full_get_token_text(ctx,i,j);
+            auto probability = whisper_full_get_token_p(ctx,i,j);
             fout << token << '\t' << probability << std::endl;
             // fprintf(stderr,"token: %s %f\n",token,probability);
-	    }
+	}
     }
     return true;
 }
@@ -1005,10 +1026,16 @@ int main(int argc, char ** argv) {
                 output_lrc(ctx, fname_lrc.c_str(), params, pcmf32s);
             }
 
-            // output to score file
+            // output to SCORE file
             if (params.log_score) {
                 const auto fname_score = fname_out + ".score.txt";
                 output_score(ctx, fname_score.c_str(), params, pcmf32s);
+            }
+
+            // output to TOKEN file
+            if (params.log_tokens) {
+                const auto fname_tokens = fname_out + ".tokens.txt";
+                output_tokens(ctx, fname_tokens.c_str(), params, pcmf32s);
             }
         }
     }

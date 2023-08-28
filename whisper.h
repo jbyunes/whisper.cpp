@@ -489,6 +489,9 @@ extern "C" {
     WHISPER_API const char * whisper_full_get_segment_text           (struct whisper_context * ctx, int i_segment);
     WHISPER_API const char * whisper_full_get_segment_text_from_state(struct whisper_state * state, int i_segment);
 
+    // Get token from id
+    WHISPER_API const char * whisper_token_from_id(struct whisper_context * ctx, int id);
+  
     // Get number of tokens in the specified segment
     WHISPER_API int whisper_full_n_tokens           (struct whisper_context * ctx, int i_segment);
     WHISPER_API int whisper_full_n_tokens_from_state(struct whisper_state * state, int i_segment);
