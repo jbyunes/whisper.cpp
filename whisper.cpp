@@ -3465,7 +3465,7 @@ struct whisper_full_params whisper_full_default_params(enum whisper_sampling_str
         /*.print_realtime    =*/ false,
         /*.print_timestamps  =*/ true,
 
-        /*.token_timestamps  =*/ false,
+        /*.token_timestamps  =*/ true,//false,
         /*.thold_pt          =*/ 0.01f,
         /*.thold_ptsum       =*/ 0.01f,
         /*.max_len           =*/ 0,

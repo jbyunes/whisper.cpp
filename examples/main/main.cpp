@@ -522,8 +522,9 @@ bool output_score(struct whisper_context * ctx, const char * fname, const whispe
         for (int j = 0; j < n_tokens; j++) {
             auto token = whisper_full_get_token_text(ctx,i,j);
             auto probability = whisper_full_get_token_p(ctx,i,j);
-            fout << token << '\t' << probability << std::endl;
             // fprintf(stderr,"token: %s %f\n",token,probability);
+            auto data = whisper_full_get_token_data(ctx,i,j);
+            fout << token << '\t' << probability << '\t' << data.t0 << '\t' << data.t1 << std::endl;
 	}
     }
     return true;
