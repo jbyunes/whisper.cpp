@@ -5,6 +5,11 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+//JBY
+#include <vector>
+#define MAX_CANDIDATES 10
+//EOJBY
+
 #ifdef WHISPER_SHARED
 #    ifdef _WIN32
 #        ifdef WHISPER_BUILD
@@ -71,6 +76,13 @@ extern "C" {
 
     typedef int whisper_token;
 
+  //JBY
+  typedef struct whisper_token_candidate {
+        whisper_token id;  // token id
+        float p;           // probability of the token
+  } whisper_token_candidate;
+  //EOJBY
+
     typedef struct whisper_token_data {
         whisper_token id;  // token id
         whisper_token tid; // forced timestamp token id
@@ -86,6 +98,10 @@ extern "C" {
         int64_t t1;        //   end time of the token
 
         float vlen;        // voice length of the token
+      //JBY
+      int n_candidates;
+      whisper_token_candidate candidates[MAX_CANDIDATES];
+      //EOJBY
     } whisper_token_data;
 
     typedef struct whisper_model_loader {
@@ -484,6 +500,12 @@ extern "C" {
 
     // Get whether the next segment is predicted as a speaker turn
     WHISPER_API bool whisper_full_get_segment_speaker_turn_next(struct whisper_context * ctx, int i_segment);
+
+  //JBY
+    WHISPER_API double whisper_full_get_segment_entropy(struct whisper_context * ctx, int i_segment);
+    WHISPER_API double whisper_full_get_segment_score(struct whisper_context * ctx, int i_segment);
+    WHISPER_API double whisper_full_get_segment_avg_logprobs(struct whisper_context * ctx, int i_segment);
+  //EOJBY
 
     // Get the text of the specified segment
     WHISPER_API const char * whisper_full_get_segment_text           (struct whisper_context * ctx, int i_segment);

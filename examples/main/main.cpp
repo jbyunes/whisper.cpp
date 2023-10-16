@@ -10,6 +10,10 @@
 #include <vector>
 #include <cstring>
 
+//JBY
+#include <iostream>
+//EOJBY
+
 #if defined(_MSC_VER)
 #pragma warning(disable: 4244 4267) // possible loss of data
 #endif
@@ -89,6 +93,9 @@ struct whisper_params {
     bool no_timestamps   = false;
     bool log_score       = false;
     bool log_tokens      = false;
+  //JBY
+    bool log_candidates = false;
+  //EOJBY
 
     std::string language  = "en";
     std::string prompt;
@@ -163,6 +170,9 @@ bool whisper_params_parse(int argc, char ** argv, whisper_params & params) {
         else if (arg == "-oved" || arg == "--ov-e-device")     { params.openvino_encode_device = argv[++i]; }
         else if (arg == "-ls"   || arg == "--log-score")       { params.log_score       = true; }
         else if (arg == "-lt"   || arg == "--log-tokens")      { params.log_tokens      = true; }
+        //JBY
+        else if (arg == "-lc"   || arg == "--log-candidates")  { params.log_candidates  = true; }
+        //EOJBY
         else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
             whisper_print_usage(argc, argv, params);
@@ -218,6 +228,9 @@ void whisper_print_usage(int /*argc*/, char ** argv, const whisper_params & para
     fprintf(stderr, "  -oved D,   --ov-e-device DNAME [%-7s] the OpenVINO device used for encode inference\n",  params.openvino_encode_device.c_str());
     fprintf(stderr, "  -ls,       --log-score         [%-7s] log best decoder scores of tokens\n",              params.log_score?"true":"false");
     fprintf(stderr, "  -lt,       --log-tokens        [%-7s] log token dictionnary\n",                          params.log_tokens?"true":"false");
+    //JBY
+    fprintf(stderr, "  -lc,       --log-candidates    [%-7s] log token candidates\n",                           params.log_candidates?"true":"false");
+    //EOJBY
     fprintf(stderr, "\n");
 }
 
@@ -525,6 +538,71 @@ bool output_score(struct whisper_context * ctx, const char * fname, const whispe
             // fprintf(stderr,"token: %s %f\n",token,probability);
             auto data = whisper_full_get_token_data(ctx,i,j);
             fout << token << '\t' << probability << '\t' << data.t0 << '\t' << data.t1 << std::endl;
+	}
+    }
+    return true;
+}
+
+static const std::string csv_quote(const char *s) {
+  std::string as_string(s);
+  std::string out;
+  for (char c: as_string) {
+    if (c=='"') out.append("\"\"");
+    else out.push_back(c);
+  }
+  return out;
+}
+
+bool output_candidates(struct whisper_context * ctx, const char * fname, const whisper_params & params, std::vector<std::vector<float>> pcmf32s) {
+    std::ofstream fout(fname);
+    if (!fout.is_open()) {
+        fprintf(stderr, "%s: failed to open '%s' for writing\n", __func__, fname);
+        return false;
+    }
+    fprintf(stderr, "%s: saving output to '%s'\n", __func__, fname);
+    fout << "Segment text"
+         << '\t' << "Entropy"
+         << '\t' << "Score"
+         << '\t' << "Avg logprobs"
+         << '\t' << "Current segment" << '\t' << "Total segments"
+         << '\t' << "Current token" << '\t' << "Total tokens";
+    for (int i=0; i<MAX_CANDIDATES; i++) {
+      fout << '\t' << "Subtoken" << (i+1)
+           << '\t' << "Prob " << (i+1);
+    }
+    fout << std::endl;
+
+    const int n_segments = whisper_full_n_segments(ctx);
+    // fprintf(stderr,"segments: %d\n",n_segments);
+    for (int i = 0; i < n_segments; ++i) {
+        const int n_tokens = whisper_full_n_tokens(ctx,i);
+        // fprintf(stderr,"tokens: %d\n",n_tokens);
+        for (int j = 0; j < n_tokens; j++) {
+            auto token = whisper_full_get_token_text(ctx,i,j);
+            auto probability = whisper_full_get_token_p(ctx,i,j);
+            auto data = whisper_full_get_token_data(ctx,i,j);
+            auto segment_text =  whisper_full_get_segment_text(ctx,i) ;
+            auto entropy = whisper_full_get_segment_entropy(ctx,i);
+            auto avg_logprobs = whisper_full_get_segment_avg_logprobs(ctx,i);
+            auto score = whisper_full_get_segment_score(ctx,i);
+            //JBY
+            if (data.n_candidates>0) {
+              fout << segment_text << '\t' << entropy
+                   << '\t' << score
+                   << '\t' << avg_logprobs
+                   << '\t' << (i+1) << '\t' << n_segments
+                   << '\t' << (j+1) << '\t' << n_tokens; 
+              for (int c=0; c<data.n_candidates; c++) {
+                auto cdata = data.candidates[c];
+                auto t = whisper_token_from_id(ctx,cdata.id);
+                fout << '\t' << csv_quote(t) << '\t' << cdata.p;
+              }
+              for (int c=data.n_candidates; c<MAX_CANDIDATES; c++) {
+                fout << '\t' << "]N/A[" << '\t' << 0.f;
+              }
+              fout << std::endl;
+            }
+            //EOJBY
 	}
     }
     return true;
@@ -1038,6 +1116,14 @@ int main(int argc, char ** argv) {
                 const auto fname_tokens = fname_out + ".tokens.txt";
                 output_tokens(ctx, fname_tokens.c_str(), params, pcmf32s);
             }
+
+            // output some internal data to CSV file: top ten candidates tokens with thier proba, segment score, entropy
+            //JBY
+            if (params.log_candidates) {
+                const auto fname_tokens = fname_out + ".candidates.csv";
+                output_candidates(ctx, fname_tokens.c_str(), params, pcmf32s);
+            }
+            //EOJBY
         }
     }
 
