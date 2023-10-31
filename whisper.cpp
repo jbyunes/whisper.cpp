@@ -103,7 +103,7 @@ static void byteswap_tensor(ggml_tensor * tensor) {
   } while (0)
 
 // define this to enable verbose trace logging - useful for debugging purposes
-#define WHISPER_DEBUG
+//#define WHISPER_DEBUG
 
 #if defined(WHISPER_DEBUG)
 #define WHISPER_PRINT_DEBUG(...)                \
@@ -4393,7 +4393,7 @@ int whisper_full_with_state(
       //EOJBY
       for (int i = 0, n_max = whisper_n_text_ctx(ctx)/2 - 4; i < n_max; ++i) {
         //JBY
-        printf("i=%d nmax=%d\n",i,n_max);
+        WHISPER_PRINT_DEBUG("i=%d nmax=%d\n",i,n_max);
         //EOFJBY
         const int64_t t_start_sample_us = ggml_time_us();
 

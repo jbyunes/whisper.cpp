@@ -553,6 +553,7 @@ static const std::string csv_quote(const char *s) {
   return out;
 }
 
+//JBY
 bool output_candidates(struct whisper_context * ctx, const char * fname, const whisper_params & params, std::vector<std::vector<float>> pcmf32s) {
     std::ofstream fout(fname);
     if (!fout.is_open()) {
@@ -570,6 +571,8 @@ bool output_candidates(struct whisper_context * ctx, const char * fname, const w
       fout << '\t' << "Subtoken" << (i+1)
            << '\t' << "Prob " << (i+1);
     }
+    fout << '\t' << "Word candidate";
+    fout << '\t' << "TT count";
     fout << std::endl;
 
     const int n_segments = whisper_full_n_segments(ctx);
@@ -577,36 +580,57 @@ bool output_candidates(struct whisper_context * ctx, const char * fname, const w
     for (int i = 0; i < n_segments; ++i) {
         const int n_tokens = whisper_full_n_tokens(ctx,i);
         // fprintf(stderr,"tokens: %d\n",n_tokens);
+        std::string word_candidate;
+        int tt_count = 0;
         for (int j = 0; j < n_tokens; j++) {
             auto token = whisper_full_get_token_text(ctx,i,j);
+            switch (token[0]) {
+            case ' ': { // current token is beginning of a word
+              word_candidate = token;
+              for (int n = j+1; n < n_tokens; n++) { // aggregate next potential tokens
+                auto nt = whisper_full_get_token_text(ctx,i,n);
+                if (nt[0]==' ' || nt[0]=='[') break; // stop aggregating
+                word_candidate += nt;
+              }
+            } break;
+            case '[':
+              if (!strncmp(token,"[_TT_",5)) tt_count++;
+              word_candidate = token;
+              break;
+            }
+            //JBY
+            //            std::cerr << __func__ << ": token = " << token << ", word candidate = " << word_candidate << std::endl;
+            //EOJBY
             auto probability = whisper_full_get_token_p(ctx,i,j);
             auto data = whisper_full_get_token_data(ctx,i,j);
             auto segment_text =  whisper_full_get_segment_text(ctx,i) ;
             auto entropy = whisper_full_get_segment_entropy(ctx,i);
             auto avg_logprobs = whisper_full_get_segment_avg_logprobs(ctx,i);
             auto score = whisper_full_get_segment_score(ctx,i);
-            //JBY
+
             if (data.n_candidates>0) {
               fout << segment_text << '\t' << entropy
                    << '\t' << score
                    << '\t' << avg_logprobs
                    << '\t' << (i+1) << '\t' << n_segments
-                   << '\t' << (j+1) << '\t' << n_tokens; 
+                   << '\t' << (j+1) << '\t' << n_tokens;
               for (int c=0; c<data.n_candidates; c++) {
                 auto cdata = data.candidates[c];
                 auto t = whisper_token_from_id(ctx,cdata.id);
                 fout << '\t' << csv_quote(t) << '\t' << cdata.p;
               }
-              for (int c=data.n_candidates; c<MAX_CANDIDATES; c++) {
+              for (int c=data.n_candidates; c<MAX_CANDIDATES; c++) { // There is sometimes less than MAX_CANDIDATES...
                 fout << '\t' << "]N/A[" << '\t' << 0.f;
               }
+              fout << '\t' << word_candidate;
+              fout << '\t' << tt_count;
               fout << std::endl;
             }
-            //EOJBY
 	}
     }
     return true;
 }
+//EOJBY
 
 bool output_json(struct whisper_context * ctx, const char * fname, const whisper_params & params, std::vector<std::vector<float>> pcmf32s) {
     std::ofstream fout(fname);
