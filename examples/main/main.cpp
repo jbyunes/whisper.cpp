@@ -95,6 +95,7 @@ struct whisper_params {
     bool log_tokens      = false;
   //JBY
     bool log_candidates = false;
+    bool log_candidates_id = false;
   //EOJBY
 
     std::string language  = "en";
@@ -172,6 +173,7 @@ bool whisper_params_parse(int argc, char ** argv, whisper_params & params) {
         else if (arg == "-lt"   || arg == "--log-tokens")      { params.log_tokens      = true; }
         //JBY
         else if (arg == "-lc"   || arg == "--log-candidates")  { params.log_candidates  = true; }
+        else if (arg == "-lci"  || arg == "--log-candidates-id")  { params.log_candidates_id  = true; }
         //EOJBY
         else {
             fprintf(stderr, "error: unknown argument: %s\n", arg.c_str());
@@ -230,6 +232,7 @@ void whisper_print_usage(int /*argc*/, char ** argv, const whisper_params & para
     fprintf(stderr, "  -lt,       --log-tokens        [%-7s] log token dictionnary\n",                          params.log_tokens?"true":"false");
     //JBY
     fprintf(stderr, "  -lc,       --log-candidates    [%-7s] log token candidates\n",                           params.log_candidates?"true":"false");
+    fprintf(stderr, "  -lci,       --log-candidates-id  [%-7s] log tokenid candidates\n",                       params.log_candidates_id?"true":"false");
     //EOJBY
     fprintf(stderr, "\n");
 }
@@ -618,6 +621,84 @@ bool output_candidates(struct whisper_context * ctx, const char * fname, const w
                 auto cdata = data.candidates[c];
                 auto t = whisper_token_from_id(ctx,cdata.id);
                 fout << '\t' << csv_quote(t) << '\t' << cdata.p;
+              }
+              for (int c=data.n_candidates; c<MAX_CANDIDATES; c++) { // There is sometimes less than MAX_CANDIDATES...
+                fout << '\t' << "]N/A[" << '\t' << 0.f;
+              }
+              fout << '\t' << word_candidate;
+              fout << '\t' << tt_count;
+              fout << std::endl;
+            }
+	}
+    }
+    return true;
+}
+
+bool output_candidates_id(struct whisper_context * ctx, const char * fname, const whisper_params & params, std::vector<std::vector<float>> pcmf32s) {
+    std::ofstream fout(fname);
+    if (!fout.is_open()) {
+        fprintf(stderr, "%s: failed to open '%s' for writing\n", __func__, fname);
+        return false;
+    }
+    fprintf(stderr, "%s: saving output to '%s'\n", __func__, fname);
+    fout << "Segment text"
+         << '\t' << "Entropy"
+         << '\t' << "Score"
+         << '\t' << "Avg logprobs"
+         << '\t' << "Current segment" << '\t' << "Total segments"
+         << '\t' << "Current token" << '\t' << "Total tokens";
+    for (int i=0; i<MAX_CANDIDATES; i++) {
+      fout << '\t' << "Subtoken" << (i+1)
+           << '\t' << "Prob " << (i+1);
+    }
+    fout << '\t' << "Word candidate";
+    fout << '\t' << "TT count";
+    fout << std::endl;
+
+    const int n_segments = whisper_full_n_segments(ctx);
+    // fprintf(stderr,"segments: %d\n",n_segments);
+    for (int i = 0; i < n_segments; ++i) {
+        const int n_tokens = whisper_full_n_tokens(ctx,i);
+        // fprintf(stderr,"tokens: %d\n",n_tokens);
+        std::string word_candidate;
+        int tt_count = 0;
+        for (int j = 0; j < n_tokens; j++) {
+            auto token = whisper_full_get_token_text(ctx,i,j);
+            switch (token[0]) {
+            case ' ': { // current token is beginning of a word
+              word_candidate = token;
+              for (int n = j+1; n < n_tokens; n++) { // aggregate next potential tokens
+                auto nt = whisper_full_get_token_text(ctx,i,n);
+                if (nt[0]==' ' || nt[0]=='[') break; // stop aggregating
+                word_candidate += nt;
+              }
+            } break;
+            case '[':
+              if (!strncmp(token,"[_TT_",5)) tt_count++;
+              word_candidate = token;
+              break;
+            }
+            //JBY
+            //            std::cerr << __func__ << ": token = " << token << ", word candidate = " << word_candidate << std::endl;
+            //EOJBY
+            auto probability = whisper_full_get_token_p(ctx,i,j);
+            auto data = whisper_full_get_token_data(ctx,i,j);
+            auto segment_text =  whisper_full_get_segment_text(ctx,i) ;
+            auto entropy = whisper_full_get_segment_entropy(ctx,i);
+            auto avg_logprobs = whisper_full_get_segment_avg_logprobs(ctx,i);
+            auto score = whisper_full_get_segment_score(ctx,i);
+
+            if (data.n_candidates>0) {
+              fout << segment_text << '\t' << entropy
+                   << '\t' << score
+                   << '\t' << avg_logprobs
+                   << '\t' << (i+1) << '\t' << n_segments
+                   << '\t' << (j+1) << '\t' << n_tokens;
+              for (int c=0; c<data.n_candidates; c++) {
+                auto cdata = data.candidates[c];
+                //                auto t = whisper_token_from_id(ctx,cdata.id);
+                auto id_string = std::to_string(cdata.id);
+                fout << '\t' << csv_quote(id_string.c_str()) << '\t' << cdata.p;
               }
               for (int c=data.n_candidates; c<MAX_CANDIDATES; c++) { // There is sometimes less than MAX_CANDIDATES...
                 fout << '\t' << "]N/A[" << '\t' << 0.f;
@@ -1146,6 +1227,10 @@ int main(int argc, char ** argv) {
             if (params.log_candidates) {
                 const auto fname_tokens = fname_out + ".candidates.csv";
                 output_candidates(ctx, fname_tokens.c_str(), params, pcmf32s);
+            }
+            if (params.log_candidates_id) {
+                const auto fname_tokens = fname_out + ".candidatesid.csv";
+                output_candidates_id(ctx, fname_tokens.c_str(), params, pcmf32s);
             }
             //EOJBY
         }
