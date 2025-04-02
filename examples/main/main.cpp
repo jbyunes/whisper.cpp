@@ -572,7 +572,9 @@ bool output_candidates(struct whisper_context * ctx, const char * fname, const w
          << '\t' << "Current token" << '\t' << "Total tokens";
     for (int i=0; i<MAX_CANDIDATES; i++) {
       fout << '\t' << "Subtoken" << (i+1)
-           << '\t' << "Prob " << (i+1);
+           << '\t' << "Prob " << (i+1)
+           << '\t' << "xmin " << (i+1)
+           << '\t' << "xmax" << (i+1);
     }
     fout << '\t' << "Word candidate";
     fout << '\t' << "TT count";
@@ -620,7 +622,7 @@ bool output_candidates(struct whisper_context * ctx, const char * fname, const w
               for (int c=0; c<data.n_candidates; c++) {
                 auto cdata = data.candidates[c];
                 auto t = whisper_token_from_id(ctx,cdata.id);
-                fout << '\t' << csv_quote(t) << '\t' << cdata.p;
+                fout << '\t' << csv_quote(t) << '\t' << cdata.p << '\t' << data.t0 << '\t' << data.t1;
               }
               for (int c=data.n_candidates; c<MAX_CANDIDATES; c++) { // There is sometimes less than MAX_CANDIDATES...
                 fout << '\t' << "]N/A[" << '\t' << 0.f;

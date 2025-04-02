@@ -7,7 +7,7 @@
 
 //JBY
 #include <vector>
-#define MAX_CANDIDATES 50
+#define MAX_CANDIDATES 100
 //EOJBY
 
 #ifdef WHISPER_SHARED
